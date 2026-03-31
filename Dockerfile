@@ -1,4 +1,4 @@
-FROM n8nio/n8n:1.28.0
+FROM n8nio/n8n
 
 USER root
 RUN mkdir -p /home/node/.n8n && chown -R node:node /home/node/.n8n
