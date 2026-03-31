@@ -1,0 +1,1869 @@
+{
+  "name": "Snow DEPLOY",
+  "nodes": [
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "gpt-4o-mini",
+          "mode": "list",
+          "cachedResultName": "GPT-4O-MINI"
+        },
+        "responses": {
+          "values": [
+            {
+              "content": "=You are an expert HR data extraction assistant. Your task is to analyze the provided resume text and extract structured information.\n\nCRITICAL INSTRUCTIONS:\n\n1. MISSING DATA:\n- If information is not found, return \"NA\"\n- Do NOT guess subjective or HR-only fields\n\n2. PHONE NUMBER:\n- Remove country code (+91, +1, etc.)\n- Remove spaces, dashes, dots\n- Return only digits\n- If there are two numbers give the first number only.\n\n3. TOTAL EXPERIENCE CALCULATION:\n- Extract ONLY from Work Experience / Employment History\n- Use ALL jobs listed\n- Convert dates into Month + Year\n- If \"Present/Current\" → use March 2026\n- Calculate total duration in months\n- Convert to \"X Years Y Months\"\n- Do NOT use summary claims like \"5+ years\"\n\n4. CURRENT ROLE TYPE:\n- Infer from title:\n  Developer / Engineer → Dev\n  Lead → Lead\n  Architect → Arch\n  Manager / Project Manager → PM\n- Else return \"NA\"\n\n5. SERVICE NOW MODULES:\n- Identify based on keywords:\n  Incident, Change, Problem, Service Catalog → ITSM\n  CMDB, Discovery → ITOM\n  HR → HRSD\n  Customer workflows → CSM\n- Return comma-separated values\n- Else \"NA\"\n\n6. SERVICE NOW EXPERIENCE:\n- If role/title contains \"ServiceNow\", estimate duration from relevant roles\n- If not clearly separable → \"NA\"\n\n7. DOMAINS:\n- Identify industry from project/client context:\n  Banking/Finance/Insurance → BFSI\n  Healthcare → Healthcare\n  Telecom → Telecom\n- Multiple → comma-separated\n- Else \"NA\"\n\n8. TOP CLIENTS & PROJECTS:\n- Extract organization names mentioned in work experience\n- Identify key projects from descriptions\n- If reasonably inferred → include\n- Else \"NA\"\n\n9. Video Link (optional, consented)\n-Give video link if given in resume otherwise NA\n\n10. LINKEDIN URL EXTRACTION:\n\n- Extract LinkedIn URL from anywhere in the resume.\n- Look under sections like \"Social Links\", \"Social Profiles\", \"Contact\", \"Online Presence\", etc.\n- Even if the word \"LinkedIn\" is not explicitly mentioned, extract any URL containing \"linkedin.com\".\n- If multiple LinkedIn URLs exist, return the most complete profile link.\n- Remove any tracking parameters (anything after '?').\n- If no LinkedIn URL is found, return \"NA\".\n\n11. LOCATION PRIORITY RULE:\n\n- If a location is mentioned at the top of the resume near the name, phone number, or email (in the header/contact section), treat it as \"Home/Base Location\".\n\n- If a location is mentioned in work experience or explicitly as \"Current Location\", treat it as \"Current Location (City)\".\n\n- If only one location is found in the header/contact section and no other location exists:\n  - Assign it to \"Home/Base Location\"\n  - Keep \"Current Location (City)\" as \"NA\"\n\n- And dont give state only give city.\n\n12. OUTPUT:\n- Return ONLY valid JSON\n- No markdown, no explanation\n\n---\n\nEXTRACT ONLY THESE FIELDS:\n\n{\n  \"Full Name\": \"NA\",\n  \"Phone\": \"NA\",\n  \"Email\": \"NA\",\n  \"LinkedIn URL\": \"NA\",\n  \"Current Location (City)\": \"NA\",\n  \"Home/Base Location\": \"NA\",\n  \"Notice Period (Days)\": \"NA\",\n  \"Total Experience (Years)\": \"NA\",\n  \"ServiceNow Experience (Years)\": \"NA\",\n  \"Service Now Modules\": \"NA\",\n  \"Current Title\": \"NA\",\n  \"Current Role Type (Dev/Lead/Arch/PM)\": \"NA\",\n  \"Certifications (CSA/CAD/CIS…)\": \"NA\",\n  \"Certification Count\": \"NA\",\n  \"Domains (BFSI/Healthcare/etc.)\": \"NA\",\n  \"Key Clients Worked With (Logos/Names)\": \"NA\",\n  \"Top Projects\": \"NA\",\n  \"Top Clients\": \"NA\",\n  \"Video Link (optional, consented)\": NA\n}\n\nINPUT TEXT:\n{{$json.text}}"
+            }
+          ]
+        },
+        "builtInTools": {},
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 2.1,
+      "position": [
+        -704,
+        80
+      ],
+      "id": "74ffbe75-3ba8-440d-a996-7c6b48a725dd",
+      "name": "Message a model2",
+      "credentials": {
+        "openAiApi": {
+          "id": "6OZ0CDyW4DTzBeZR",
+          "name": "OpenAi account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const returnItems = [];\n\nfor (const item of $input.all()) {\n  try {\n    // 1. Drill down to grab the raw stringified JSON from the AI output\n    let rawText = item.json.output[0].content[0].text;\n    \n    // 2. Strip out any markdown formatting just to be safe\n    rawText = rawText.replace(/```json/gi, '').replace(/```/g, '').trim();\n    \n    // 3. Parse that string into your clean JavaScript object\n    const cleanJson = JSON.parse(rawText);\n    \n    // 4. OVERWRITE OWNER: Look into the 'owners' array and grab the displayName\n    if (item.json.owners && item.json.owners.length > 0) {\n        cleanJson[\"Owner (Recruiter/HM)\"] = item.json.owners[0].displayName;\n    }\n\n    // 5. OVERWRITE DATE ADDED: Grab createdTime, split at 'T', and keep the date\n    if (item.json.createdTime) {\n        cleanJson[\"Date Added\"] = item.json.createdTime.split('T')[0];\n    }\n    \n    // 6. Attach the other top-level metadata just in case you need it\n    cleanJson.original_file_name = item.json.name;\n    cleanJson.original_file_id = item.json.id;\n\n    // 7. Return the beautifully clean JSON\n    returnItems.push({ json: cleanJson });\n    \n  } catch (error) {\n    // Failsafe in case the AI completely breaks the JSON format\n    returnItems.push({ \n      json: { \n        error: \"Bro, the AI gave invalid JSON\", \n        details: error.message \n      } \n    });\n  }\n}\n\nreturn returnItems;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -560,
+        496
+      ],
+      "id": "3c26a3a0-73e1-4fc1-a462-265746417d6c",
+      "name": "Code in JavaScript3"
+    },
+    {
+      "parameters": {
+        "operation": "appendOrUpdate",
+        "documentId": {
+          "__rl": true,
+          "value": "1YSnecp5TImQE9R6MELRliTt3aUZr_erGL0AITsywHII",
+          "mode": "list",
+          "cachedResultName": "CHECKING FOR NMO",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1YSnecp5TImQE9R6MELRliTt3aUZr_erGL0AITsywHII/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Sheet1",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1YSnecp5TImQE9R6MELRliTt3aUZr_erGL0AITsywHII/edit#gid=0"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Phone": "={{ $json.Phone }}",
+            "DOJ": "NA",
+            "Top Clients": "={{ $json['Top Clients'] }}",
+            "Top Projects": "={{ $json['Top Projects'] }}",
+            "Overall Rating (0-5)": "NA",
+            "Final Comments": "NA",
+            "Selected For (Staff Aug/Inhouse/Core Product)": "NA",
+            "Decision Tag (Staff Aug / Inhouse / Core Product / Hold / Reject)": "NA",
+            "Video Link (optional, consented)": "={{ $json['Video Link (optional, consented)'] }}",
+            "Transcript Link (optional)": "NA",
+            "Interviewer Names": "NA",
+            "Tech Round Date": "NA",
+            "Screen Date": "NA",
+            "Package": "NA",
+            "Referral Candidates (Names/Links)": "NA",
+            "Can Bring Clients? (Y/N)": "NA",
+            "Client Magnet Potential (0-5)": "NA",
+            "Confidence (0-5)": "NA",
+            "Attitude / Team Player (0-5)": "NA",
+            "Communication (0-5)": "NA",
+            "Client Facing Ability (0-5)": "NA",
+            "Can Own Module End-to-End? (Y/N)": "NA",
+            "Can Take Interviews? (Y/N)": "NA",
+            "Can Lead Team? (Y/N)": "NA",
+            "Migration/Upgrade Experience (0-5)": "NA",
+            "SaaS Client Experience (0-5)": "NA",
+            "Modernization Experience (0-5)": "NA",
+            "Client References Available? (Y/N)": "NA",
+            "Key Clients Worked With (Logos/Names)": "={{ $json['Key Clients Worked With (Logos/Names)'] }}",
+            "Domains (BFSI/Healthcare/etc.)": "={{ $json['Domains (BFSI/Healthcare/etc.)'] }}",
+            "Certification Count": "={{ $json['Certification Count'] }}",
+            "Certifications (CSA/CAD/CIS…)": "={{ $json['Certifications (CSA/CAD/CIS…)'] }}",
+            "Current Role Type (Dev/Lead/Arch/PM)": "={{ $json['Current Role Type (Dev/Lead/Arch/PM)'] }}",
+            "Current Title": "={{ $json['Current Title'] }}",
+            "Service Now Modules": "={{ $json['Service Now Modules'] }}",
+            "ServiceNow Experience (Years)": "={{ $json['ServiceNow Experience (Years)'] }}",
+            "Total Experience (Years)": "={{ $json['Total Experience (Years)'] }}",
+            "Current Employer Type (Product/Services/Captive)": "NA",
+            "Direct or Vendor (Direct/Vendor/Contract)": "NA",
+            "Expected CTC": "NA",
+            "Current CTC (Fixed)": "NA",
+            "Notice Period (Days)": "NA",
+            "PF": "NA",
+            "Can Join NCR Onsite? (Y/N)": "NA",
+            "Preferred Work Mode (Remote/NCR/Hybrid/Onsite)": "NA",
+            "Home/Base Location": "={{ $json['Home/Base Location'] }}",
+            "Current Location (City)": "={{ $json['Current Location (City)'] }}",
+            "Photo URL": "NA",
+            "LinkedIn URL": "={{ $json['LinkedIn URL'] }}",
+            "Email": "={{ $json.Email }}",
+            "Stage (Sourced/Screen/R1/R2/Final/Offer/Joined/Rejected)": "NA",
+            "Full Name": "={{ $json['Full Name'] }}",
+            "Owner (Recruiter/HM)": "={{ $json['Owner (Recruiter/HM)'] }}",
+            "Referred By (Name)": "NA",
+            "Source (LinkedIn / Referral / Vendor / Other)": "NA",
+            "Date Added": "={{ $json['Date Added'] }}",
+            "Candidate ID": "NA"
+          },
+          "matchingColumns": [
+            "Phone"
+          ],
+          "schema": [
+            {
+              "id": "Candidate ID",
+              "displayName": "Candidate ID",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Date Added",
+              "displayName": "Date Added",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Source (LinkedIn / Referral / Vendor / Other)",
+              "displayName": "Source (LinkedIn / Referral / Vendor / Other)",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Referred By (Name)",
+              "displayName": "Referred By (Name)",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Owner (Recruiter/HM)",
+              "displayName": "Owner (Recruiter/HM)",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Full Name",
+              "displayName": "Full Name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Stage (Sourced/Screen/R1/R2/Final/Offer/Joined/Rejected)",
+              "displayName": "Stage (Sourced/Screen/R1/R2/Final/Offer/Joined/Rejected)",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Phone",
+              "displayName": "Phone",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Email",
+              "displayName": "Email",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "LinkedIn URL",
+              "displayName": "LinkedIn URL",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Photo URL",
+              "displayName": "Photo URL",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Current Location (City)",
+              "displayName": "Current Location (City)",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Home/Base Location",
+              "displayName": "Home/Base Location",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Preferred Work Mode (Remote/NCR/Hybrid/Onsite)",
+              "displayName": "Preferred Work Mode (Remote/NCR/Hybrid/Onsite)",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Can Join NCR Onsite? (Y/N)",
+              "displayName": "Can Join NCR Onsite? (Y/N)",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "PF",
+              "displayName": "PF",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Notice Period (Days)",
+              "displayName": "Notice Period (Days)",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Current CTC (Fixed)",
+              "displayName": "Current CTC (Fixed)",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Expected CTC",
+              "displayName": "Expected CTC",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Direct or Vendor (Direct/Vendor/Contract)",
+              "displayName": "Direct or Vendor (Direct/Vendor/Contract)",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Current Employer Type (Product/Services/Captive)",
+              "displayName": "Current Employer Type (Product/Services/Captive)",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Total Experience (Years)",
+              "displayName": "Total Experience (Years)",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "ServiceNow Experience (Years)",
+              "displayName": "ServiceNow Experience (Years)",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Service Now Modules",
+              "displayName": "Service Now Modules",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Current Title",
+              "displayName": "Current Title",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Current Role Type (Dev/Lead/Arch/PM)",
+              "displayName": "Current Role Type (Dev/Lead/Arch/PM)",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Certifications (CSA/CAD/CIS…)",
+              "displayName": "Certifications (CSA/CAD/CIS…)",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Certification Count",
+              "displayName": "Certification Count",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Domains (BFSI/Healthcare/etc.)",
+              "displayName": "Domains (BFSI/Healthcare/etc.)",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Key Clients Worked With (Logos/Names)",
+              "displayName": "Key Clients Worked With (Logos/Names)",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Client References Available? (Y/N)",
+              "displayName": "Client References Available? (Y/N)",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Modernization Experience (0-5)",
+              "displayName": "Modernization Experience (0-5)",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "SaaS Client Experience (0-5)",
+              "displayName": "SaaS Client Experience (0-5)",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Migration/Upgrade Experience (0-5)",
+              "displayName": "Migration/Upgrade Experience (0-5)",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Can Lead Team? (Y/N)",
+              "displayName": "Can Lead Team? (Y/N)",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Can Take Interviews? (Y/N)",
+              "displayName": "Can Take Interviews? (Y/N)",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Can Own Module End-to-End? (Y/N)",
+              "displayName": "Can Own Module End-to-End? (Y/N)",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Client Facing Ability (0-5)",
+              "displayName": "Client Facing Ability (0-5)",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Communication (0-5)",
+              "displayName": "Communication (0-5)",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Attitude / Team Player (0-5)",
+              "displayName": "Attitude / Team Player (0-5)",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Confidence (0-5)",
+              "displayName": "Confidence (0-5)",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Client Magnet Potential (0-5)",
+              "displayName": "Client Magnet Potential (0-5)",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Can Bring Clients? (Y/N)",
+              "displayName": "Can Bring Clients? (Y/N)",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Referral Candidates (Names/Links)",
+              "displayName": "Referral Candidates (Names/Links)",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Package",
+              "displayName": "Package",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Screen Date",
+              "displayName": "Screen Date",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Tech Round Date",
+              "displayName": "Tech Round Date",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Interviewer Names",
+              "displayName": "Interviewer Names",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Transcript Link (optional)",
+              "displayName": "Transcript Link (optional)",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Video Link (optional, consented)",
+              "displayName": "Video Link (optional, consented)",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Decision Tag (Staff Aug / Inhouse / Core Product / Hold / Reject)",
+              "displayName": "Decision Tag (Staff Aug / Inhouse / Core Product / Hold / Reject)",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Selected For (Staff Aug/Inhouse/Core Product)",
+              "displayName": "Selected For (Staff Aug/Inhouse/Core Product)",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Final Comments",
+              "displayName": "Final Comments",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Overall Rating (0-5)",
+              "displayName": "Overall Rating (0-5)",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Top Projects",
+              "displayName": "Top Projects",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Top Clients",
+              "displayName": "Top Clients",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "DOJ",
+              "displayName": "DOJ",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        -336,
+        112
+      ],
+      "id": "37ebef5d-cc6c-457c-8360-5b92ddbe1985",
+      "name": "Append or update row in sheet1",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "9EwCCoKyaDXNPQjg",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "url": "https://www.googleapis.com/drive/v3/files",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleDriveOAuth2Api",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "q",
+              "value": "='1azhefjXMiwbR5dKEfIvTsb1jN37FV8iC' in parents AND trashed=false AND (mimeType='application/pdf' OR mimeType='application/vnd.openxmlformats-officedocument.wordprocessingml.document')"
+            },
+            {
+              "name": "fields",
+              "value": "files(id,name,createdTime,mimeType,owners)"
+            },
+            {
+              "name": "pageSize",
+              "value": "1000"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        -2448,
+        64
+      ],
+      "id": "cddc53e2-3cc3-465c-86ca-58e660897158",
+      "name": "HTTP Request1",
+      "executeOnce": true,
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "yd0yfmgbkkuLF76H",
+          "name": "Google Drive account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1Hf7uBnr-qv-7QOjO8f3Ai3zEN6HAy-7LZ0G_xprCwDM",
+          "mode": "list",
+          "cachedResultName": "FILE IDS SNOW",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1Hf7uBnr-qv-7QOjO8f3Ai3zEN6HAy-7LZ0G_xprCwDM/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Sheet1",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1Hf7uBnr-qv-7QOjO8f3Ai3zEN6HAy-7LZ0G_xprCwDM/edit#gid=0"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        -2432,
+        304
+      ],
+      "id": "0cb10fdc-4c0d-46fa-9cda-bc392002815f",
+      "name": "Get row(s) in sheet",
+      "alwaysOutputData": true,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "9EwCCoKyaDXNPQjg",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const sheetItems = $items(\"Get row(s) in sheet\") || [];\n\nconst existingIds = new Set(\n  sheetItems\n    .map(item => item.json['FILE ID'])\n    .filter(id => id)\n);\n\n// Collect new files\nconst newFiles = [];\n\nfor (const item of items) {\n  const files = item.json.files || [];\n\n  for (const file of files) {\n    if (!file.id) continue;\n\n    if (!existingIds.has(file.id)) {\n      newFiles.push({\n        json: file\n      });\n    }\n  }\n}\n\nreturn newFiles;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -2032,
+        64
+      ],
+      "id": "7098cbef-3391-419f-8229-40c622f54c57",
+      "name": "Code in JavaScript4",
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        -1616,
+        64
+      ],
+      "id": "d733b8f7-18df-4061-b35b-f69af9ae83c0",
+      "name": "Loop Over Items"
+    },
+    {
+      "parameters": {
+        "operation": "download",
+        "fileId": {
+          "__rl": true,
+          "value": "={{ $json.id }}",
+          "mode": "id"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        -1584,
+        448
+      ],
+      "id": "44d012c7-8234-4d87-8019-be1007d79720",
+      "name": "Download file1",
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "yd0yfmgbkkuLF76H",
+          "name": "Google Drive account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "pdf",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.extractFromFile",
+      "typeVersion": 1.1,
+      "position": [
+        -1072,
+        432
+      ],
+      "id": "d9b9c91d-a4fd-44d6-881a-8847ef2f6e21",
+      "name": "Extract from File"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "4350523f-0c54-4cdd-8ce9-96194cf7a79d",
+              "leftValue": "={{ $binary.data.mimeType }}",
+              "rightValue": "application/pdf",
+              "operator": {
+                "type": "string",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": "={{ false }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        -1376,
+        448
+      ],
+      "id": "c42fcb26-8675-4205-92cf-559b261380d9",
+      "name": "If1"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "return {\n  json: {\n    ...$json,\n   \n  }\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1168,
+        80
+      ],
+      "id": "f6a990ac-3017-4318-9fff-dc2dec56afa4",
+      "name": "Code in JavaScript5"
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "combineBy": "combineByPosition",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        -784,
+        496
+      ],
+      "id": "258abb23-36ff-4b58-a23e-4e7e038940a9",
+      "name": "Merge"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.compression",
+      "typeVersion": 1.1,
+      "position": [
+        -1408,
+        752
+      ],
+      "id": "8085d8ab-3f76-4fec-b219-ed2ebf55b7a5",
+      "name": "Compression"
+    },
+    {
+      "parameters": {
+        "jsCode": "const returnItems = [];\n\nfor (const item of $input.all()) {\n  \n  // 1. WIPE THE JSON DATA: Force the text metadata to say .zip\n  if (item.json.name) {\n    item.json.name = item.json.name.replace(/\\.docx$/i, '.zip');\n  }\n  if (item.json.mimeType) {\n    item.json.mimeType = 'application/zip';\n  }\n\n  // 2. WIPE THE BINARY DATA: Force the physical file to say .zip\n  if (item.binary && item.binary.data) {\n    item.binary.data.fileName = item.binary.data.fileName.replace(/\\.docx$/i, '.zip');\n    item.binary.data.mimeType = 'application/zip';\n    item.binary.data.fileExtension = 'zip';\n  }\n  \n  returnItems.push(item);\n}\n\nreturn returnItems;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1520,
+        1008
+      ],
+      "id": "ffcf17c7-90e2-4ae3-b0ec-00233303fbad",
+      "name": "Code in JavaScript6"
+    },
+    {
+      "parameters": {
+        "jsCode": "const returnItems = [];\n\nfor (const item of $input.all()) {\n  if (!item.binary) continue;\n\n  for (const key of Object.keys(item.binary)) {\n    const fileData = item.binary[key];\n\n    // Find the one file that holds the resume text\n    if (fileData.fileName === 'document.xml' || fileData.fileName === 'word/document.xml') {\n      returnItems.push({\n        json: { status: \"Isolated the pure XML file!\" },\n        // We move it to the standard 'data' slot so the next node can easily read it\n        binary: { data: fileData }\n      });\n    }\n  }\n}\n\nreturn returnItems;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1200,
+        752
+      ],
+      "id": "e8084ee0-8b8a-4bf2-82ab-029641d7db81",
+      "name": "Code in JavaScript7"
+    },
+    {
+      "parameters": {
+        "operation": "xml",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.extractFromFile",
+      "typeVersion": 1.1,
+      "position": [
+        -1296,
+        960
+      ],
+      "id": "7b963c87-9d01-484a-8446-f3c801f19028",
+      "name": "Extract from File2"
+    },
+    {
+      "parameters": {
+        "jsCode": "const returnItems = [];\n\nfor (const item of $input.all()) {\n  // Grab that massive alien XML string you just showed me\n  // Note: if your node output property is named something else, change 'data' to match it\n  const xmlString = item.json.data; \n\n  if (xmlString) {\n    // THE BULLDOZER: Destroy all XML tags <...> and leave only the human text\n    let cleanText = xmlString.replace(/<[^>]+>/g, ' ');\n    \n    // Clean up any extra giant spaces it left behind\n    cleanText = cleanText.replace(/\\s+/g, ' ').trim();\n\n    returnItems.push({\n      json: {\n        clean_resume_text: cleanText,\n        status: \"Bro, we did it.\"\n      }\n    });\n  } else {\n    returnItems.push({ json: { error: \"No XML data found to clean.\" } });\n  }\n}\n\nreturn returnItems;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1024,
+        960
+      ],
+      "id": "d894a0d2-46aa-424a-ad1a-d58819124139",
+      "name": "Code in JavaScript8"
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "gpt-4o-mini",
+          "mode": "list",
+          "cachedResultName": "GPT-4O-MINI"
+        },
+        "responses": {
+          "values": [
+            {
+              "content": "=You are an expert HR data extraction assistant. Your task is to analyze the provided resume text and extract structured information.\n\nCRITICAL INSTRUCTIONS:\n\n1. MISSING DATA:\n- If information is not found, return \"NA\"\n- Do NOT guess subjective or HR-only fields\n\n2. PHONE NUMBER:\n- Remove country code (+91, +1, etc.)\n- Remove spaces, dashes, dots\n- Return only digits\n- If there are two numbers give only first number\n\n\n3. TOTAL EXPERIENCE CALCULATION:\n- Extract ONLY from Work Experience / Employment History\n- Use ALL jobs listed\n- Convert dates into Month + Year\n- If \"Present/Current\" → use March 2026\n- Calculate total duration in months\n- Convert to \"X Years Y Months\"\n- Do NOT use summary claims like \"5+ years\"\n\n4. CURRENT ROLE TYPE:\n- Infer from title:\n  Developer / Engineer → Dev\n  Lead → Lead\n  Architect → Arch\n  Manager / Project Manager → PM\n- Else return \"NA\"\n\n5. SERVICE NOW MODULES:\n- Identify based on keywords:\n  Incident, Change, Problem, Service Catalog → ITSM\n  CMDB, Discovery → ITOM\n  HR → HRSD\n  Customer workflows → CSM\n- Return comma-separated values\n- Else \"NA\"\n\n6. SERVICE NOW EXPERIENCE:\n- If role/title contains \"ServiceNow\", estimate duration from relevant roles\n- If not clearly separable → \"NA\"\n\n7. DOMAINS:\n- Identify industry from project/client context:\n  Banking/Finance/Insurance → BFSI\n  Healthcare → Healthcare\n  Telecom → Telecom\n- Multiple → comma-separated\n- Else \"NA\"\n\n8. TOP CLIENTS & PROJECTS:\n- Extract organization names mentioned in work experience\n- Identify key projects from descriptions\n- If reasonably inferred → include\n- Else \"NA\"\n\n9. Video Link (optional, consented)\n-Give video link if given in resume otherwise NA\n\n10. LINKEDIN URL EXTRACTION:\n\n- Extract LinkedIn URL from anywhere in the resume.\n- Look under sections like \"Social Links\", \"Social Profiles\", \"Contact\", \"Online Presence\", etc.\n- Even if the word \"LinkedIn\" is not explicitly mentioned, extract any URL containing \"linkedin.com\".\n- If multiple LinkedIn URLs exist, return the most complete profile link.\n- Remove any tracking parameters (anything after '?').\n- If no LinkedIn URL is found, return \"NA\".\n\n11. LOCATION PRIORITY RULE:\n\n- If a location is mentioned at the top of the resume near the name, phone number, or email (in the header/contact section), treat it as \"Home/Base Location\".\n\n- If a location is mentioned in work experience or explicitly as \"Current Location\", treat it as \"Current Location (City)\".\n\n- If only one location is found in the header/contact section and no other location exists:\n  - Assign it to \"Home/Base Location\"\n  - Keep \"Current Location (City)\" as \"NA\"\n\n12. OUTPUT:\n- Return ONLY valid JSON\n- No markdown, no explanation\n\n---\n\nEXTRACT ONLY THESE FIELDS:\n\n{\n  \"Full Name\": \"NA\",\n  \"Phone\": \"NA\",\n  \"Email\": \"NA\",\n  \"LinkedIn URL\": \"NA\",\n  \"Current Location (City)\": \"NA\",\n  \"Home/Base Location\": \"NA\",\n  \"Notice Period (Days)\": \"NA\",\n  \"Total Experience (Years)\": \"NA\",\n  \"ServiceNow Experience (Years)\": \"NA\",\n  \"Service Now Modules\": \"NA\",\n  \"Current Title\": \"NA\",\n  \"Current Role Type (Dev/Lead/Arch/PM)\": \"NA\",\n  \"Certifications (CSA/CAD/CIS…)\": \"NA\",\n  \"Certification Count\": \"NA\",\n  \"Domains (BFSI/Healthcare/etc.)\": \"NA\",\n  \"Key Clients Worked With (Logos/Names)\": \"NA\",\n  \"Top Projects\": \"NA\",\n  \"Top Clients\": \"NA\",\n  \"Video Link (optional, consented)\": NA\n}\n\n\nINPUT TEXT:\n{{$json.clean_resume_text}}"
+            }
+          ]
+        },
+        "builtInTools": {},
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 2.1,
+      "position": [
+        -432,
+        720
+      ],
+      "id": "5c82cf2e-a746-450e-92f4-90eac3623c8f",
+      "name": "Message a model1",
+      "credentials": {
+        "openAiApi": {
+          "id": "6OZ0CDyW4DTzBeZR",
+          "name": "OpenAi account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "value": "1YSnecp5TImQE9R6MELRliTt3aUZr_erGL0AITsywHII",
+          "mode": "list",
+          "cachedResultName": "CHECKING FOR NMO",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1YSnecp5TImQE9R6MELRliTt3aUZr_erGL0AITsywHII/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 1722656718,
+          "mode": "list",
+          "cachedResultName": "Sheet2",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1YSnecp5TImQE9R6MELRliTt3aUZr_erGL0AITsywHII/edit#gid=1722656718"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "CV": "=https://drive.google.com/file/d/{{ $json.original_file_id }}/view?usp=drive_link",
+            "Ph No": "={{ $json.Phone }}"
+          },
+          "matchingColumns": [
+            "Ph No"
+          ],
+          "schema": [
+            {
+              "id": "Date",
+              "displayName": "Date",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Profile",
+              "displayName": "Profile",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Source",
+              "displayName": "Source",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Name",
+              "displayName": "Name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Candidate Name ",
+              "displayName": "Candidate Name ",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Sourced",
+              "displayName": "Sourced",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Exp",
+              "displayName": "Exp",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Ctc",
+              "displayName": "Ctc",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Ectc",
+              "displayName": "Ectc",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "NP",
+              "displayName": "NP",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Ph No",
+              "displayName": "Ph No",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Pref location",
+              "displayName": "Pref location",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "CV",
+              "displayName": "CV",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Comments after shortlisting",
+              "displayName": "Comments after shortlisting",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Yes/No",
+              "displayName": "Yes/No",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Date of shortlisting",
+              "displayName": "Date of shortlisting",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Shortlisted by",
+              "displayName": "Shortlisted by",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Date of calling",
+              "displayName": "Date of calling",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Called By",
+              "displayName": "Called By",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Status",
+              "displayName": "Status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "COmments after calling",
+              "displayName": "COmments after calling",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Interview Scheduled",
+              "displayName": "Interview Scheduled",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Interview Scheduled Date",
+              "displayName": "Interview Scheduled Date",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Feedback / Selected",
+              "displayName": "Feedback / Selected",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "CV Created on",
+              "displayName": "CV Created on",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Client Interview Scheduled?",
+              "displayName": "Client Interview Scheduled?",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Client Interview Date ",
+              "displayName": "Client Interview Date ",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Client Interview Feedback",
+              "displayName": "Client Interview Feedback",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Offer Given",
+              "displayName": "Offer Given",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Offer Given Date",
+              "displayName": "Offer Given Date",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "row_number",
+              "displayName": "row_number",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true,
+              "readOnly": true,
+              "removed": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        0,
+        0
+      ],
+      "id": "fa1f3ba9-f2ce-4e69-a4ba-0fdea4d0c0e5",
+      "name": "Update row in sheet",
+      "alwaysOutputData": true,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "9EwCCoKyaDXNPQjg",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "appendOrUpdate",
+        "documentId": {
+          "__rl": true,
+          "value": "1Hf7uBnr-qv-7QOjO8f3Ai3zEN6HAy-7LZ0G_xprCwDM",
+          "mode": "list",
+          "cachedResultName": "FILE IDS SNOW",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1Hf7uBnr-qv-7QOjO8f3Ai3zEN6HAy-7LZ0G_xprCwDM/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Sheet1",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1Hf7uBnr-qv-7QOjO8f3Ai3zEN6HAy-7LZ0G_xprCwDM/edit#gid=0"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Name": "={{ $json['Full Name'] }}",
+            "CV LINK": "=https://drive.google.com/file/d/{{ $json.original_file_id }}/view?usp=drive_link",
+            "Phone": "={{ $json.Phone }}",
+            "FILE ID": "={{ $json.original_file_id }}"
+          },
+          "matchingColumns": [
+            "Phone"
+          ],
+          "schema": [
+            {
+              "id": "FILE ID",
+              "displayName": "FILE ID",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Name",
+              "displayName": "Name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "CV LINK",
+              "displayName": "CV LINK",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Phone",
+              "displayName": "Phone",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Service Now Modules",
+              "displayName": "Service Now Modules",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Current Title",
+              "displayName": "Current Title",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Current Role Type (Dev/Lead/Arch/PM)",
+              "displayName": "Current Role Type (Dev/Lead/Arch/PM)",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Certifications (CSA/CAD/CIS…)",
+              "displayName": "Certifications (CSA/CAD/CIS…)",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Certification Count",
+              "displayName": "Certification Count",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Domains (BFSI/Healthcare/etc.)",
+              "displayName": "Domains (BFSI/Healthcare/etc.)",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Key Clients Worked With (Logos/Names)",
+              "displayName": "Key Clients Worked With (Logos/Names)",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Top Projects",
+              "displayName": "Top Projects",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Top Clients",
+              "displayName": "Top Clients",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Video Link (optional, consented)",
+              "displayName": "Video Link (optional, consented)",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Owner (Recruiter/HM)",
+              "displayName": "Owner (Recruiter/HM)",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Date Added",
+              "displayName": "Date Added",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "original_file_name",
+              "displayName": "original_file_name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "original_file_id",
+              "displayName": "original_file_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        0,
+        496
+      ],
+      "id": "f7856a8b-78fb-4586-bd13-04e4aaa997d7",
+      "name": "Append or update row in sheet",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "9EwCCoKyaDXNPQjg",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 1
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.3,
+      "position": [
+        -2752,
+        112
+      ],
+      "id": "54b3fe07-0f7b-4ee2-940c-c73c40ad4a46",
+      "name": "Schedule Trigger"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "eae4ee88-3bc1-4c88-bec5-69494dbdd255",
+              "leftValue": "={{ $json}}",
+              "rightValue": "",
+              "operator": {
+                "type": "object",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        -1888,
+        256
+      ],
+      "id": "e0fb30ea-ea82-4c48-a30d-bdec50d971fe",
+      "name": "If"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Message a model2": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript3": {
+      "main": [
+        [
+          {
+            "node": "Append or update row in sheet1",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Append or update row in sheet",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Update row in sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request1": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript4",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get row(s) in sheet": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript4": {
+      "main": [
+        [
+          {
+            "node": "If",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Loop Over Items": {
+      "main": [
+        [],
+        [
+          {
+            "node": "Code in JavaScript5",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Download file1": {
+      "main": [
+        [
+          {
+            "node": "If1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract from File": {
+      "main": [
+        [
+          {
+            "node": "Message a model2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If1": {
+      "main": [
+        [
+          {
+            "node": "Extract from File",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Code in JavaScript6",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript5": {
+      "main": [
+        [
+          {
+            "node": "Download file1",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Compression": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript7",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript6": {
+      "main": [
+        [
+          {
+            "node": "Compression",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript7": {
+      "main": [
+        [
+          {
+            "node": "Extract from File2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract from File2": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript8",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript8": {
+      "main": [
+        [
+          {
+            "node": "Message a model1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Message a model1": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Append or update row in sheet": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "Get row(s) in sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "49e7e6bd-b67a-4aac-906c-1c6e3e815f38",
+  "meta": {
+    "instanceId": "bde9791e0538a1a32844da0bb0f5b76e78da2d1ee5e29073edbf1bdc66ac233b"
+  },
+  "id": "qYWseHvBzCipNLLP",
+  "tags": []
+}
